@@ -21,7 +21,7 @@
             align-items: center;
             height: 100vh;
         }
-        #particles-js {
+        #background-canvas {
             position: absolute;
             top: 0;
             left: 0;
@@ -63,7 +63,24 @@
             z-index: 2;
             animation: bounce 2s infinite;
         }
-        #restart {
+        #how-to-play {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(30, 30, 30, 0.95);
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 1.2rem;
+            color: #ddd;
+            z-index: 3;
+            display: block;
+        }
+        #how-to-play.hidden {
+            display: none;
+        }
+        #start-game, #restart {
             background: #00ccff;
             border: none;
             padding: 0.5rem 1rem;
@@ -74,7 +91,7 @@
             margin-top: 1rem;
             transition: transform 0.3s;
         }
-        #restart:hover {
+        #start-game:hover, #restart:hover {
             transform: scale(1.1);
         }
         h1 {
@@ -88,77 +105,117 @@
             animation: bounce 2s infinite;
         }
         @keyframes bounce {
-            0%, 20%, 50%, 80%, 100% { transform: translate(-50%, 0); }
-            40% { transform: translate(-50%, -10px); }
-            60% { transform: translate(-50%, -5px); }
+            0%, 20%, 50%, 80%, 100% { transform: translateX(-50%) translateY(0); }
+            40% { transform: translateX(-50%) translateY(-10px); }
+            60% { transform: translateX(-50%) translateY(-5px); }
         }
     </style>
 </head>
 <body>
-    <div id="particles-js"></div>
+    <canvas id="background-canvas"></canvas>
     <div id="game-container">
         <h1>Pavan's Bug Blaster</h1>
         <div id="score">Score: 0</div>
         <canvas id="game-canvas"></canvas>
+        <div id="how-to-play">
+            <h2>How to Play</h2>
+            <p>Use <strong>Left/Right Arrow Keys</strong> to move your spaceship.<br>
+               Press <strong>Spacebar</strong> to shoot bugs (invaders).<br>
+               Score points by hitting bugs. Game speeds up over time!<br>
+               Don’t let bugs reach the bottom, or it’s game over.</p>
+            <button id="start-game">Start Game</button>
+        </div>
         <div id="game-over">
             Game Over!<br>
             <button id="restart">Restart</button>
         </div>
     </div>
-    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
     <script>
-        particlesJS("particles-js", {
-            "particles": {
-                "number": { "value": 100, "density": { "enable": true, "value_area": 800 } },
-                "color": { "value": ["#00ccff", "#ff66cc", "#66ff66"] },
-                "shape": { "type": "circle" },
-                "opacity": { "value": 0.7, "random": true },
-                "size": { "value": 4, "random": true },
-                "line_linked": { "enable": true, "distance": 120, "color": "#ffffff", "opacity": 0.4, "width": 1 },
-                "move": { "enable": true, "speed": 5, "direction": "none", "random": true, "straight": false, "out_mode": "out" }
-            },
-            "interactivity": {
-                "detect_on": "canvas",
-                "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" }, "resize": true },
-                "modes": { "grab": { "distance": 140, "line_linked": { "opacity": 1 } }, "push": { "particles_nb": 4 } }
-            },
-            "retina_detect": true
-        });
+        const bgCanvas = document.getElementById('background-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        bgCanvas.width = window.innerWidth;
+        bgCanvas.height = window.innerHeight;
 
-        const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = 800;
-        canvas.height = 600;
+        const gameCanvas = document.getElementById('game-canvas');
+        const ctx = gameCanvas.getContext('2d');
+        gameCanvas.width = 800;
+        gameCanvas.height = 600;
 
         let score = 0;
         let gameOver = false;
+        let gameStarted = false;
+        let invaderSpeed = 1;
         const scoreDisplay = document.getElementById('score');
         const gameOverScreen = document.getElementById('game-over');
+        const howToPlayScreen = document.getElementById('how-to-play');
+        const startButton = document.getElementById('start-game');
         const restartButton = document.getElementById('restart');
 
+        // Load player image (spaceship)
+        const playerImg = new Image();
+        playerImg.src = 'https://opengameart.org/sites/default/files/spaceship_small_red.png'; // Free spaceship image
+
         const player = {
-            x: canvas.width / 2 - 25,
-            y: canvas.height - 60,
+            x: gameCanvas.width / 2 - 25,
+            y: gameCanvas.height - 60,
             width: 50,
-            height: 30,
+            height: 50, // Adjusted for image
             speed: 5,
             dx: 0
         };
 
         const bullets = [];
         const invaders = [];
-        const invaderSpeed = 2;
-        const spawnRate = 60;
+        let spawnRate = 120;
+        let frameCount = 0;
+
+        // Fancy Background Animation (Rotating Stars)
+        const stars = [];
+        for (let i = 0; i < 100; i++) {
+            stars.push({
+                x: Math.random() * bgCanvas.width,
+                y: Math.random() * bgCanvas.height,
+                size: Math.random() * 3 + 1,
+                speed: Math.random() * 0.02 + 0.01,
+                angle: Math.random() * Math.PI * 2
+            });
+        }
+
+        function drawBackground() {
+            bgCtx.fillStyle = '#0a0a0a';
+            bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = '#00ccff';
+            stars.forEach(star => {
+                star.angle += star.speed;
+                const dx = Math.cos(star.angle) * 2;
+                const dy = Math.sin(star.angle) * 2;
+                bgCtx.beginPath();
+                bgCtx.arc(star.x + dx, star.y + dy, star.size, 0, Math.PI * 2);
+                bgCtx.fill();
+                star.x += dx * 0.01;
+                star.y += dy * 0.01;
+                if (star.x < 0) star.x = bgCanvas.width;
+                if (star.x > bgCanvas.width) star.x = 0;
+                if (star.y < 0) star.y = bgCanvas.height;
+                if (star.y > bgCanvas.height) star.y = 0;
+            });
+        }
 
         function drawPlayer() {
-            ctx.fillStyle = '#00ccff';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+            if (playerImg.complete) {
+                ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+            } else {
+                ctx.fillStyle = '#00ccff'; // Fallback
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
         }
 
         function drawBullets() {
-            ctx.fillStyle = '#66ff66';
             bullets.forEach((bullet, index) => {
-                ctx.fillRect(bullet.x, bullet.y, 5, 10);
+                ctx.fillStyle = '#66ff66';
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, 3, 0, Math.PI * 2); // Circular laser shots
+                ctx.fill();
                 bullet.y -= 5;
                 if (bullet.y < 0) bullets.splice(index, 1);
             });
@@ -169,7 +226,7 @@
             invaders.forEach((invader, index) => {
                 ctx.fillRect(invader.x, invader.y, 30, 20);
                 invader.y += invaderSpeed;
-                if (invader.y > canvas.height) {
+                if (invader.y > gameCanvas.height) {
                     invaders.splice(index, 1);
                     endGame();
                 }
@@ -177,9 +234,9 @@
         }
 
         function spawnInvader() {
-            if (Math.random() < 1 / spawnRate && !gameOver) {
+            if (Math.random() < 1 / spawnRate && gameStarted && !gameOver) {
                 invaders.push({
-                    x: Math.random() * (canvas.width - 30),
+                    x: Math.random() * (gameCanvas.width - 30),
                     y: -20
                 });
             }
@@ -189,10 +246,10 @@
             bullets.forEach((bullet, bIndex) => {
                 invaders.forEach((invader, iIndex) => {
                     if (
-                        bullet.x < invader.x + 30 &&
-                        bullet.x + 5 > invader.x &&
-                        bullet.y < invader.y + 20 &&
-                        bullet.y + 10 > invader.y
+                        bullet.x - 3 < invader.x + 30 &&
+                        bullet.x + 3 > invader.x &&
+                        bullet.y - 3 < invader.y + 20 &&
+                        bullet.y + 3 > invader.y
                     ) {
                         bullets.splice(bIndex, 1);
                         invaders.splice(iIndex, 1);
@@ -211,18 +268,28 @@
         function resetGame() {
             score = 0;
             gameOver = false;
-            player.x = canvas.width / 2 - 25;
+            gameStarted = true;
+            invaderSpeed = 1;
+            spawnRate = 120;
+            player.x = gameCanvas.width / 2 - 25;
             bullets.length = 0;
             invaders.length = 0;
             scoreDisplay.textContent = `Score: ${score}`;
             gameOverScreen.style.display = 'none';
+            howToPlayScreen.classList.add('hidden');
         }
 
         function update() {
-            if (!gameOver) {
+            if (!gameOver && gameStarted) {
                 player.x += player.dx;
                 if (player.x < 0) player.x = 0;
-                if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+                if (player.x + player.width > gameCanvas.width) player.x = gameCanvas.width - player.width;
+
+                frameCount++;
+                if (frameCount % 300 === 0) {
+                    invaderSpeed += 0.5;
+                    spawnRate = Math.max(30, spawnRate - 10);
+                }
 
                 spawnInvader();
                 checkCollisions();
@@ -230,13 +297,14 @@
         }
 
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
             drawPlayer();
             drawBullets();
             drawInvaders();
         }
 
         function gameLoop() {
+            drawBackground();
             update();
             draw();
             requestAnimationFrame(gameLoop);
@@ -245,8 +313,8 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft') player.dx = -player.speed;
             if (e.key === 'ArrowRight') player.dx = player.speed;
-            if (e.key === ' ' && !gameOver) {
-                bullets.push({ x: player.x + player.width / 2 - 2.5, y: player.y });
+            if (e.key === ' ' && gameStarted && !gameOver) {
+                bullets.push({ x: player.x + player.width / 2, y: player.y });
             }
         });
 
@@ -254,6 +322,7 @@
             if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') player.dx = 0;
         });
 
+        startButton.addEventListener('click', resetGame);
         restartButton.addEventListener('click', resetGame);
 
         gameLoop();
